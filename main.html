@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Breadboard Auto-Router</title>
+  <script>
+  (function () {
+    var K = 'bb_theme', m = 'auto', q = matchMedia('(prefers-color-scheme: dark)');
+    try { m = localStorage.getItem(K) || 'auto'; } catch (e) {}
+    function ap() { var r = document.documentElement; r.dataset.theme = (m === 'dark' || (m === 'auto' && q.matches)) ? 'dark' : 'light'; }
+    window.__setTheme = function (v) { m = v; try { localStorage.setItem(K, v); } catch (e) {} ap(); };
+    window.__getTheme = function () { return m; };
+    q.addEventListener('change', ap); ap();
+  })();
+  </script>
+  <style>
+    :root{
+      --bg:#f3f4f6;--pn:#fff;--pn2:#f7f8f9;--tx:#111827;--mu:#6b7280;--bd:#e5e7eb;--bd2:#d1d5db;
+      --ac:#0f766e;--ac-h:#0b5f59;--on-ac:#fff;--ac-soft:#e4f3f1;--ac-ring:rgba(15,118,110,.25);
+      --dn:#c0392b;--dn-soft:#fdecea;--wn:#b45309;--wn-soft:#fef3c7;--ok:#0f766e;
+      --dot:#d3d7dc;--canvas:#eceef0;--sh:0 1px 2px rgba(16,24,40,.08),0 4px 12px rgba(16,24,40,.08);
+      --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;color-scheme:light;
+    }
+    :root[data-theme=dark]{color-scheme:dark;--bg:#0e1113;--pn:#171a1d;--pn2:#1d2125;--tx:#e8eaed;--mu:#9aa3ad;--bd:#2a2f35;--bd2:#383e46;--ac:#2dd4bf;--ac-h:#5eead4;--on-ac:#04201d;--ac-soft:#10302d;--ac-ring:rgba(45,212,191,.35);--dn:#f87171;--dn-soft:#3a1e1e;--wn:#fbbf24;--wn-soft:#3a2f12;--ok:#2dd4bf;--dot:#262b31;--canvas:#121518;--sh:0 1px 2px rgba(0,0,0,.5),0 4px 12px rgba(0,0,0,.4)}
+    *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--bd2) transparent}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--tx);font:13.5px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+    :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+    .i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    button *,.tab *{pointer-events:none}
+    code{font:12px var(--mono);background:var(--pn2);border:1px solid var(--bd);padding:0 4px;border-radius:4px}
+
+    /* Controls */
+    :where(input:not([type=checkbox]):not([type=file]),select,textarea){font:inherit;color:var(--tx);background-color:var(--pn);border:1px solid var(--bd2);border-radius:6px;padding:0 9px;height:32px;min-width:0;transition:border-color .12s,box-shadow .12s}
+    :where(input,select,textarea):hover{border-color:var(--mu)}
+    :where(input,select,textarea):focus{outline:0;border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-ring)}
+    select{appearance:none;padding-right:26px;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,var(--mu) 50%),linear-gradient(135deg,var(--mu) 50%,transparent 50%);background-position:calc(100% - 14px) 55%,calc(100% - 9px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+    textarea{height:auto;padding:8px 10px;resize:vertical}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;font:inherit;font-weight:550;color:var(--tx);background:var(--pn);border:1px solid var(--bd2);border-radius:6px;cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s,color .12s,transform .06s}
+    .btn:hover{background:var(--pn2);border-color:var(--mu)}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:var(--ac);border-color:var(--ac);color:var(--on-ac)}
+    .btn.primary:hover{background:var(--ac-h);border-color:var(--ac-h)}
+    .btn.lg{height:40px;font-size:14px;border-radius:8px}
+    .btn.sm{height:28px;padding:0 9px;font-size:12.5px}
+    .btn.icon{width:28px;padding:0}
+    .btn.quiet{border-color:transparent;background:transparent;color:var(--mu)}
+    .btn.quiet:hover{background:var(--pn2);color:var(--tx)}
+    .btn.del:hover{background:var(--dn-soft);color:var(--dn)}
+    .btn.warn{background:var(--wn-soft);color:var(--wn);border-color:transparent}
+    .btn.warn.is-paused{background:var(--ac-soft);color:var(--ac)}
+    .btn.block{width:100%}
+    .opt{display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none;font-size:13px;line-height:1.4}
+    .opt small{display:block;color:var(--mu);font-size:12px}
+    .opt input{appearance:none;flex:none;width:30px;height:18px;margin:1px 0 0;border-radius:99px;background:var(--bd2);position:relative;cursor:pointer;transition:background .15s}
+    .opt input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+    .opt input:checked{background:var(--ac)}
+    .opt input:checked::after{transform:translateX(12px)}
+
+    /* Layout */
+    .app{display:grid;grid-template-columns:372px minmax(0,1fr);height:100vh}
+    .side{display:flex;flex-direction:column;min-height:0;background:var(--pn);border-right:1px solid var(--bd)}
+    .brand{display:flex;gap:10px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bd)}
+    .logo{width:32px;height:32px;border-radius:8px;background:var(--ac);color:var(--on-ac);display:grid;place-items:center}
+    .logo .i{width:18px;height:18px}
+    .brand h1{font-size:14.5px;font-weight:650;margin:0;letter-spacing:-.01em}
+    .brand p{margin:0;font-size:12px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brand-t{min-width:0}
+    .side-scroll{flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:18px}
+    .sec-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;min-height:28px}
+    .sec-h h2{margin:0;font-size:13px;font-weight:650;display:flex;align-items:center}
+    .count{font-size:11.5px;color:var(--mu);background:var(--pn2);border:1px solid var(--bd);border-radius:99px;padding:0 7px;margin-left:8px;font-weight:500;font-variant-numeric:tabular-nums}
+    .stack{display:flex;flex-direction:column;gap:10px}
+    .net{width:100%;font:12.5px/1.55 var(--mono);min-height:112px}
+
+    /* Component list */
+    #cl{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;margin:0 -4px;padding:2px 4px}
+    #cl:empty::before{content:"Chưa có linh kiện. Thêm bên dưới hoặc dán netlist, linh kiện sẽ được nhận diện tự động.";display:block;padding:14px;border:1px dashed var(--bd2);border-radius:8px;color:var(--mu);font-size:12.5px;text-align:center}
+    .comp{border:1px solid var(--bd);border-radius:8px;background:var(--pn);padding:6px;transition:border-color .12s}
+    .comp:hover{border-color:var(--bd2)}
+    .comp-main{display:flex;align-items:center;gap:6px}
+    .comp-main select{flex:1;height:30px;font-size:12.5px}
+    .comp-id{width:54px;height:30px;font:600 12.5px var(--mono);text-align:center}
+    .comp-meta{flex:1;color:var(--mu);font-size:12.5px}
+    .badge{--c:var(--mu);min-width:40px;text-align:center;font-size:11.5px;font-weight:650;padding:4px 6px;border-radius:5px;color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);border:1px solid color-mix(in srgb,var(--c) 28%,transparent)}
+    .badge[data-t=IC]{--c:#2563eb}.badge[data-t=R]{--c:#b45309}.badge[data-t=LED]{--c:#dc2626}
+    .badge[data-t=C],.badge[data-t=CC]{--c:#7c3aed}.badge[data-t=SW],.badge[data-t=BTN2]{--c:#0f766e}
+    .comp-pw{display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 8px;background:var(--pn2);border-radius:6px;font-size:12px}
+    .comp-pw input{width:56px;height:26px;text-align:center}
+    .pw-l{font-weight:650}.pw-l.v{color:var(--dn)}.pw-l.g{margin-left:6px}
+    .add{display:flex;gap:6px;margin-top:8px}.add select{flex:1}
+
+    /* Help tooltip */
+    .tip{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-left:4px;border-radius:50%;color:var(--mu);cursor:help}
+    .tip:hover,.tip:focus-visible{color:var(--ac);background:var(--ac-soft)}
+    .tip-text{visibility:hidden;opacity:0;position:absolute;z-index:20;top:calc(100% + 8px);left:-8px;width:min(320px,80vw);padding:10px 12px;background:#1f2937;color:#f3f4f6;border-radius:8px;font-size:12px;font-weight:400;line-height:1.55;text-align:left;box-shadow:0 8px 24px rgba(0,0,0,.28);transition:opacity .15s;pointer-events:none}
+    .tip:hover .tip-text,.tip:focus .tip-text{visibility:visible;opacity:1}
+    .tip-text code{background:rgba(255,255,255,.12);border-color:transparent;color:#fcd34d}
+
+    /* Advanced */
+    details.adv{border:1px solid var(--bd);border-radius:8px}
+    details.adv>summary{list-style:none;cursor:pointer;padding:9px 12px;font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:space-between;border-radius:8px}
+    details.adv>summary:hover{background:var(--pn2)}
+    details.adv>summary::-webkit-details-marker{display:none}
+    details.adv>summary::after{content:"";width:6px;height:6px;border-right:1.5px solid var(--mu);border-bottom:1.5px solid var(--mu);transform:rotate(45deg);transition:transform .15s;margin:-3px 3px 0 0}
+    details.adv[open]>summary::after{transform:rotate(-135deg);margin-top:3px}
+    .adv-b{padding:2px 12px 12px;display:flex;flex-direction:column;gap:8px}
+    .adv-b label.cap{font-size:12px;color:var(--mu)}
+    .pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    #sym-led-input{width:100%;font:12px var(--mono)}
+
+    /* Run footer */
+    .side-foot{padding:12px 14px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:8px;box-shadow:0 -8px 14px -12px rgba(16,24,40,.3)}
+    .run{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--mu)}
+    .run select{width:150px;height:28px;font-size:12.5px}
+    .go{display:flex;gap:8px}.go .primary{flex:1}
+    kbd{font:11px var(--mono);padding:1px 5px;border-radius:4px;background:color-mix(in srgb,currentColor 18%,transparent)}
+
+    /* Workspace */
+    .work{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0}
+    .topbar{display:flex;align-items:center;gap:12px;padding:9px 16px;min-height:58px;border-bottom:1px solid var(--bd);background:var(--pn)}
+    .tabs{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0;padding:2px}
+    .tabs:empty::before{content:"Chưa có phương án. Nhập netlist rồi bấm Render.";color:var(--mu);font-size:12.5px}
+    .tab{display:flex;flex-direction:column;align-items:flex-start;padding:5px 12px;flex:none;white-space:nowrap;font:inherit;color:var(--tx);background:var(--pn);border:1px solid var(--bd);border-radius:8px;cursor:pointer;transition:border-color .12s,background .12s}
+    .tab:hover{border-color:var(--mu)}
+    .tab-t{font-weight:600;font-size:12.5px}
+    .tab-t em{font-style:normal;font-weight:400;color:var(--mu);margin-left:6px}
+    .tab small{font-size:11.5px;color:var(--ok)}
+    .tab.bad small{color:var(--dn)}
+    .tab.on{border-color:var(--ac);background:var(--ac-soft);box-shadow:inset 0 0 0 1px var(--ac)}
+    .tools{display:flex;gap:6px;flex:none}
+    .stage{position:relative;min-height:0;background:var(--canvas)}
+    .sv{position:absolute;inset:0;overflow:auto;display:flex;padding:20px;touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+    #breadboard-container svg{display:block;flex:none;margin:auto;width:calc(var(--z,1)*100%);height:auto;aspect-ratio:1340/466}
+    .sv.pannable{cursor:grab}.sv.dragging{cursor:grabbing}
+    .zoom{position:absolute;right:18px;bottom:18px;display:flex;align-items:center;gap:2px;padding:3px;background:var(--pn);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--sh)}
+    .zoom .btn.sm{min-width:54px;color:var(--mu);font-variant-numeric:tabular-nums}
+    .status{display:flex;flex-direction:column;gap:6px;padding:9px 16px;border-top:1px solid var(--bd);background:var(--pn);font-size:12.5px}
+    .prog{color:var(--mu);font-variant-numeric:tabular-nums}
+    .prog:empty::before{content:"Sẵn sàng. Nhấp vào linh kiện hoặc dây để làm nổi bật mạng nối. Kéo để di chuyển; Ctrl + cuộn, chụm hai ngón hoặc nhấp đúp để phóng to."}
+    .log{max-height:92px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+    .log:empty{display:none}
+    .logline{display:flex;gap:8px;align-items:baseline}
+    .logline::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:currentColor;transform:translateY(-1px)}
+    .lg-err{color:var(--dn)}.lg-warn{color:var(--wn)}.lg-ok{color:var(--ok);font-weight:600}
+
+    /* Breadboard highlight (giữ nguyên hành vi) */
+    .cmp,.wire{cursor:pointer;transition:opacity .2s,filter .2s}
+    svg.has-highlight .cmp,svg.has-highlight .wire{opacity:.3}
+    svg.has-highlight .cmp.highlighted,svg.has-highlight .wire.highlighted{opacity:1!important;filter:drop-shadow(0 0 2px var(--ac))}
+
+    .seg{display:flex;margin-left:auto;padding:2px;gap:2px;flex:none;border:1px solid var(--bd);border-radius:8px;background:var(--pn2)}
+    .seg button{width:26px;height:24px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--mu);cursor:pointer;transition:background .12s,color .12s}
+    .seg button:hover{color:var(--tx)}
+    .seg button[aria-pressed=true]{background:var(--pn);color:var(--ac);box-shadow:var(--sh)}
+    .net-status{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;height:26px;padding:0 10px;font:inherit;font-size:12px;font-weight:550;color:var(--mu);background:var(--pn2);border:1px solid var(--bd);border-radius:99px;cursor:pointer}
+    .net-status::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+    .net-status[data-state=ok]{color:var(--ok);background:var(--ac-soft);border-color:transparent}
+    .net-status[data-state=bad]{color:var(--dn);background:var(--dn-soft);border-color:transparent}
+    .audit{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--bd);border-radius:10px;background:var(--pn2);font-size:13px}
+    .audit.ok{background:var(--ac-soft);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+    .audit.bad{background:var(--dn-soft);border-color:color-mix(in srgb,var(--dn) 40%,transparent)}
+    .audit-h{display:flex;align-items:center;gap:8px;font-size:14px}
+    .audit.ok .audit-h{color:var(--ok)}.audit.bad .audit-h{color:var(--dn)}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{font-size:12px;padding:2px 9px;border-radius:99px;background:var(--pn);border:1px solid var(--bd);font-variant-numeric:tabular-nums}
+    .alist{margin:0;padding-left:18px;font-size:12.5px;line-height:1.6;color:var(--dn)}
+    .audit-n{font-size:12.5px;color:var(--wn)}
+    /* Modal & toast */
+    .modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,17,20,.5);backdrop-filter:blur(3px);animation:fade .15s}
+    .modal-card{display:flex;flex-direction:column;width:min(860px,96vw);max-height:88vh;background:var(--pn);border:1px solid var(--bd);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;animation:pop .18s ease-out}
+    .modal-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 12px 18px;border-bottom:1px solid var(--bd)}
+    .modal-h h3{margin:0;font-size:15px;font-weight:650;display:flex;align-items:center}
+    .acts{display:flex;gap:6px}
+    .modal-b{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:12px;min-height:0}
+    .modal textarea{width:100%;flex:1;min-height:360px;font:12px/1.55 var(--mono);resize:none}
+    .modal textarea.term{background:#0f172a;color:#e2e8f0;border-color:#0f172a}
+    .modal textarea.prompt{min-height:170px;resize:vertical}
+    .guide{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.55}
+    .guide li{padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--pn2)}
+    .sub{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:600}
+    .toast{position:fixed;left:50%;bottom:28px;z-index:10000;transform:translate(-50%,12px);opacity:0;pointer-events:none;max-width:90vw;padding:10px 16px;background:#1f2937;color:#f9fafb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:opacity .2s,transform .2s}
+    .toast.show{opacity:1;transform:translate(-50%,0)}
+    @keyframes fade{from{opacity:0}}
+    @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+
+    @media(max-width:1180px){.tools .btn span{display:none}.tools .btn{width:32px;padding:0}}
+    @media(max-width:900px){.app{grid-template-columns:1fr;height:auto;min-height:100vh}.side{border-right:0;border-bottom:1px solid var(--bd)}.side-scroll{overflow:visible}.work{grid-template-rows:auto 62vh auto}.topbar{flex-wrap:wrap}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3m0 0L8 7m4-4 4 4M5 21h14"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5V22h16"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17h.01"/></symbol>
+  </defs></svg>
+
+  <div class="app">
+    <!-- Cột trái: linh kiện, netlist, điều khiển -->
+    <aside class="side">
+      <header class="brand">
+        <div class="logo"><svg class="i"><use href="#i-chip"/></svg></div>
+        <div class="brand-t"><h1>Breadboard Auto-Router</h1><p>Rust + WebAssembly · BSE-Netlist V2</p></div>
+        <div class="seg" id="theme-seg" role="group" aria-label="Giao diện">
+          <button type="button" data-mode="light" title="Giao diện sáng" aria-label="Giao diện sáng"><svg class="i"><use href="#i-sun"/></svg></button>
+          <button type="button" data-mode="auto" title="Theo hệ thống" aria-label="Theo hệ thống"><svg class="i"><use href="#i-monitor"/></svg></button>
+          <button type="button" data-mode="dark" title="Giao diện tối" aria-label="Giao diện tối"><svg class="i"><use href="#i-moon"/></svg></button>
+        </div>
+      </header>
+
+      <div class="side-scroll">
+        <section>
+          <div class="sec-h"><h2>Linh kiện<span class="count" id="comp-count">0</span></h2></div>
+          <div id="cl"></div>
+          <div class="add">
+            <select id="nt" aria-label="Loại linh kiện">
+              <option value="IC">IC (DIP)</option>
+              <option value="R">Điện trở</option>
+              <option value="LED">Đèn LED</option>
+              <option value="CC">Tụ gốm không phân cực (2 chân)</option>
+              <option value="C">Tụ phân cực (2 chân)</option>
+              <option value="SW">Công tắc gạt (3 chân)</option>
+              <option value="BTN2">Nút bấm (2 chân)</option>
+            </select>
+            <button id="ad" class="btn"><svg class="i"><use href="#i-plus"/></svg>Thêm</button>
+          </div>
+        </section>
+
+        <section>
+          <div class="sec-h">
+            <h2>Netlist
+              <span class="tip" tabindex="0" aria-label="Cú pháp nhanh"><svg class="i"><use href="#i-help"/></svg>
+                <span class="tip-text">
+                  <b>Cú pháp BSE-Netlist chuẩn</b><br>
+                  • Chuỗi nối tiếp (<code>-&gt;</code>): <code>U4:6 -&gt; R1 -&gt; L1 -&gt; GND</code><br>
+                  • Mạch nhánh RC tại chân IC, viết tách câu: <code>VCC -&gt; R5 -&gt; U1:1 -&gt; C1 -&gt; GND; U1:1 -&gt; R10 -&gt; B1:1 -&gt; B1:2 -&gt; GND</code><br>
+                  • Chân nhạy cảm (<code>*</code>): <code>*CLK: U1:2 -&gt; U2:3 -&gt; U2:11</code><br>
+                  • Cực tính LED và tụ (<code>C</code>): chân <code>1</code> = dương (+), chân <code>2</code> = âm (-)
+                </span>
+              </span>
+            </h2>
+            <button id="btn-netlist-guide" type="button" class="btn sm" title="Quy chuẩn viết Netlist và prompt mẫu cho AI"><svg class="i"><use href="#i-book"/></svg>Chuẩn Netlist &amp; AI</button>
+          </div>
+          <div class="stack">
+            <textarea id="netlist-input" class="net" rows="5" spellcheck="false" placeholder="VCC U1:14; GND U1:7&#10;U1:1 -&gt; R1 -&gt; L1 -&gt; GND"></textarea>
+            <button type="button" id="net-status" class="net-status" data-state="idle" title="Xem kết quả kiểm tra chi tiết"><span id="net-status-t">Chưa có netlist</span></button>
+            <label class="opt"><input type="checkbox" id="chk-star-hub" checked><span>Cột trung gian cho chân nhạy cảm<small>Áp dụng cho các mạng đánh dấu <code>*</code></small></span></label>
+            <label class="opt"><input type="checkbox" id="chk-sym-led"><span>LED đối xứng<small>Ưu tiên đặt gương hoặc thẳng hàng theo nhóm</small></span></label>
+            <div id="sym-led-row" style="display:none"><input type="text" id="sym-led-input" placeholder="VD: L1=L2, L3=L4" title="Các cặp hoặc nhóm LED ưu tiên đặt đối xứng" aria-label="Nhóm LED đối xứng"></div>
+          </div>
+        </section>
+
+        <details class="adv">
+          <summary>Điều hướng tìm kiếm nâng cao</summary>
+          <div class="adv-b">
+            <label class="cap" for="steer-mode">Chiến lược</label>
+            <select id="steer-mode">
+              <option value="auto" selected>Tự động phản tỉnh (Meta-AI)</option>
+              <option value="macro">Ép tìm khung IC mới (thoát hố kẹt)</option>
+              <option value="bridge">Ép tối ưu cầu rãnh và san tải 2 nửa</option>
+              <option value="surgery">Ép vi phẫu cụm R/LED/C tại điểm nghẽn</option>
+              <option value="lock_io">Khóa cụm U1/BTN/SW phải, chỉ đảo IC trái</option>
+            </select>
+            <div class="pair">
+              <button id="btn-tabu-jump" class="btn sm" title="Đưa bố cục đang kẹt vào sổ đen Tabu và ép nhảy sang bố cục IC mới ngay lập tức"><svg class="i"><use href="#i-zap"/></svg>Nhảy khỏi hố kẹt</button>
+              <button id="btn-force-surg" class="btn sm" title="Bơm ngay phôi tốt nhất hiện tại vào phòng mổ vi phẫu R-LED"><svg class="i"><use href="#i-spark"/></svg>Mổ sâu PA đang chọn</button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="side-foot">
+        <div class="run"><label for="tl">Thời gian tìm</label>
+          <select id="tl"><option value="3000">3 giây</option><option value="10000" selected>10 giây</option><option value="30000">30 giây</option><option value="90000">90 giây</option><option value="-1">Không giới hạn</option></select>
+        </div>
+        <div class="go">
+          <button id="btn-render" class="btn primary lg"><svg class="i"><use href="#i-zap"/></svg>Render breadboard <kbd>Ctrl ↵</kbd></button>
+          <button id="btn-pause" class="btn warn lg" style="display:none"><svg class="i"><use href="#i-pause"/></svg>Tạm dừng</button>
+        </div>
+        <button id="btn-more" class="btn block"><svg class="i"><use href="#i-shuffle"/></svg>Tìm thêm phương án</button>
+      </div>
+    </aside>
+
+    <!-- Cột phải: bản vẽ -->
+    <main class="work">
+      <div class="topbar">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Phương án bố trí"></div>
+        <div class="tools">
+          <button id="btn-save-file" class="btn" title="Lưu toàn bộ cấu hình và bản vẽ hiện tại về máy"><svg class="i"><use href="#i-download"/></svg><span>Lưu</span></button>
+          <button id="btn-load-file" class="btn" title="Nạp lại file cấu hình đã lưu từ máy"><svg class="i"><use href="#i-upload"/></svg><span>Nạp</span></button>
+          <button id="btn-learn-file" class="btn" title="Học và kế thừa bố cục tốt nhất từ file JSON hoặc log TXT"><svg class="i"><use href="#i-spark"/></svg><span>Học file</span></button>
+          <button id="btn-log" class="btn" title="Xem và tải nhật ký phân tích tìm kiếm"><svg class="i"><use href="#i-pulse"/></svg><span>Nhật ký</span></button>
+          <input type="file" id="file-load-input" accept=".json" style="display:none">
+          <input type="file" id="file-learn-input" accept=".json,.txt" multiple style="display:none">
+        </div>
+      </div>
+      <div class="stage">
+        <div class="sv" id="breadboard-container"></div>
+        <div class="zoom" role="group" aria-label="Thu phóng">
+          <button id="zoom-out" class="btn icon quiet" title="Thu nhỏ (-)" aria-label="Thu nhỏ"><svg class="i"><use href="#i-minus"/></svg></button>
+          <button id="zoom-val" class="btn sm quiet" title="Vừa khung (0)">100%</button>
+          <button id="zoom-in" class="btn icon quiet" title="Phóng to (+)" aria-label="Phóng to"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+      <div class="status">
+        <div id="prog" class="prog" role="status" aria-live="polite"></div>
+        <div id="log" class="log"></div>
+      </div>
+    </main>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const isSpecialType = t => t === 'R' || t === 'LED' || t === 'C' || t === 'CC';
+const isSpecialComp = c => c && isSpecialType(c.type);
+let components = [];
+
+if ($('chk-sym-led')) {
+    $('chk-sym-led').onchange = () => {
+        $('sym-led-row').style.display = $('chk-sym-led').checked ? 'flex' : 'none';
+    };
+}
+
+function getICPinsOptions(selectedPins) {
+    let options = '';
+    for (let i = 8; i <= 40; i += 2) {
+        options += `<option value="${i}" ${i === selectedPins ? 'selected' : ''}>${i} chân</option>`;
+    }
+    return options;
+}
+
+function getIcPwrPins(c) {
+    if (!c || c.type !== 'IC') return { vcc: null, gnd: null };
+    if (c.pwrMode === 'custom') {
+        const vcc = parseInt(c.vccPin, 10), gnd = parseInt(c.gndPin, 10);
+        return {
+            vcc: (!Number.isNaN(vcc) && vcc >= 1 && vcc <= c.pins) ? vcc : null,
+            gnd: (!Number.isNaN(gnd) && gnd >= 1 && gnd <= c.pins) ? gnd : null
+        };
+    }
+    return { vcc: c.pins, gnd: c.pins / 2 };
+}
+
+function renderComponents() {
+    $('cl').innerHTML = components.map((c, i) => {
+        const isIC = c.type === 'IC';
+        let labelStr = '3 chân';
+        if (c.type === 'BTN2' || isSpecialType(c.type)) labelStr = '2 chân';
+
+        const pwrMode = c.pwrMode || 'default';
+        const defVcc = c.pins, defGnd = c.pins / 2;
+        const vccVal = c.vccPin !== undefined ? c.vccPin : defVcc;
+        const gndVal = c.gndPin !== undefined ? c.gndPin : defGnd;
+
+        return `
+        <div class="comp">
+            <div class="comp-main">
+                <input class="comp-id" value="${c.id}" data-idx="${i}" data-field="id" aria-label="Tên linh kiện" title="Tên linh kiện">
+                <span class="badge" data-t="${c.type}">${c.type.replace(/\d/g, '')}</span>
+                ${isIC ? `
+                    <select data-idx="${i}" data-field="pins" title="Số chân">${getICPinsOptions(c.pins)}</select>
+                    <select data-idx="${i}" data-field="pwrMode" title="Cấu hình chân nguồn VCC / GND">
+                        <option value="default" ${pwrMode === 'default' ? 'selected' : ''}>Nguồn ${defVcc}/${defGnd}</option>
+                        <option value="custom" ${pwrMode === 'custom' ? 'selected' : ''}>Nguồn tùy chọn</option>
+                    </select>
+                ` : `<span class="comp-meta">${labelStr}</span>`}
+                ${isIC ? `<button class="btn icon sm quiet btn-rot" data-rotate="${i}" title="Xoay 180°" aria-label="Xoay 180 độ"><svg class="i"><use href="#i-rotate"/></svg></button>` : ''}
+                <button class="btn icon sm quiet del btn-del" data-delete="${i}" title="Xóa linh kiện" aria-label="Xóa linh kiện"><svg class="i"><use href="#i-trash"/></svg></button>
+            </div>
+            ${isIC && pwrMode === 'custom' ? `
+            <div class="comp-pw">
+                <span class="pw-l v">VCC</span>
+                <input type="number" min="1" max="${c.pins}" value="${vccVal}" data-idx="${i}" data-field="vccPin" placeholder="Chân +" title="Số chân VCC (1-${c.pins})" aria-label="Chân VCC">
+                <span class="pw-l g">GND</span>
+                <input type="number" min="1" max="${c.pins}" value="${gndVal}" data-idx="${i}" data-field="gndPin" placeholder="Chân -" title="Số chân GND (1-${c.pins})" aria-label="Chân GND">
+            </div>
+            ` : ''}
+        </div>
+        `;
+    }).join('');
+    if ($('comp-count')) $('comp-count').textContent = components.length;
+}
+
+$('ad').onclick = () => {
+    const type = $('nt').value;
+    const prefix = type === 'BTN2' ? 'B' : (type === 'SW' ? 'S' : (type === 'R' ? 'R' : (type === 'LED' ? 'L' : (type === 'CC' ? 'CC' : (type === 'C' ? 'C' : 'U')))));
+    let counter = 1;
+    let newId = prefix + counter;
+    while (components.some(c => c.id === newId)) { counter++; newId = prefix + counter; }
+    
+    if (type === 'IC') {
+        components.push({ id: newId, type: 'IC', pins: 14, rot: 0, pwrMode: 'default', vccPin: 14, gndPin: 7 });
+    } else {
+        components.push({ id: newId, type: type, pins: (type === 'SW' ? 3 : 2) });
+    }
+    renderComponents();
+};
+
+$('cl').onchange = (e) => {
+    const target = e.target;
+    const idx = target.dataset.idx;
+    const field = target.dataset.field;
+    if (idx != null && components[idx]) {
+        const comp = components[idx];
+        if (field === 'pins') {
+            comp.pins = parseInt(target.value, 10);
+            if ((comp.pwrMode || 'default') === 'default') {
+                comp.vccPin = comp.pins;
+                comp.gndPin = comp.pins / 2;
+            }
+            renderComponents();
+        } else if (field === 'pwrMode') {
+            comp.pwrMode = target.value;
+            if (comp.pwrMode === 'default') {
+                comp.vccPin = comp.pins;
+                comp.gndPin = comp.pins / 2;
+            } else {
+                if (!comp.vccPin || comp.vccPin > comp.pins) comp.vccPin = comp.pins;
+                if (!comp.gndPin || comp.gndPin > comp.pins) comp.gndPin = comp.pins / 2;
+            }
+            renderComponents();
+        } else if (field === 'vccPin' || field === 'gndPin') {
+            const v = parseInt(target.value, 10);
+            comp[field] = Number.isNaN(v) ? '' : v;
+        } else {
+            comp[field] = target.value.trim().toUpperCase();
+        }
+    }
+};
+
+$('cl').onclick = (e) => {
+    const delIdx = e.target.dataset.delete;
+    const rotIdx = e.target.dataset.rotate;
+    if (delIdx != null) { components.splice(delIdx, 1); renderComponents(); }
+    else if (rotIdx != null) { components[rotIdx].rot = components[rotIdx].rot ? 0 : 1; renderComponents(); }
+};
+
+renderComponents();
+
+/**
+ * ==========================================
+ * BREADBOARD RENDERER (HỖ TRỢ BẺ CHÂN BTN2 & HIGHLIGHT)
+ * ==========================================
+ */
+const BreadboardRenderer = {
+    P: 19.3, X0: 70, Y0: 49,
+    PAL: ['#2a9d8f','#e9a100','#3a86ff','#8338ec','#f77f00','#06a77d','#d6336c','#7f5539'],
+    
+    X(c) { return this.X0 + (c - 1) * this.P; },
+    Y(r) { return this.Y0 + (r + 2) * this.P + (r >= 0 ? 2 * this.P : 0) + (r >= 5 ? 2 * this.P : 0) + (r >= 10 ? 2 * this.P : 0); },
+    Yl(r) { if (Number.isInteger(r)) return this.Y(r); const a = Math.floor(r); return this.Y(a) + (this.Y(a + 1) - this.Y(a)) * (r - a); },
+    
+    validHole(c, r) {
+        const isRail = r < 0 || r > 9;
+        return c >= 1 && c <= 63 && r >= -2 && r <= 11 && 
+               (!isRail || (c >= 3 && c <= 61 && (c - 3) % 6 != 5));
+    },
+
+    render(containerId, data = {}) {
+        const W = 1340, H = 466;
+        const col = { VCC: '#d62828', GND: '#2b2b2b' }; 
+        let colorIdx = 0;
+        const nc = n => col[n] || (col[n] = this.PAL[colorIdx++ % this.PAL.length]);
+        
+        let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
+        <defs>
+            <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="4" stdDeviation="2.5" flood-opacity=".4"/></filter>
+            <g id="hl"><circle cy=".8" r="4" fill="#fff" opacity=".9"/><circle r="4" fill="#bebebe"/><circle r="2.3" fill="#404040"/></g>
+        </defs>`;
+        
+        s += `<rect x="22" y="20" width="1296" height="425" rx="9" fill="#e3e3e3" stroke="#d4d4d4"/>`;
+        const sy1 = this.Y(-1)+17, sy2 = this.Y(10)-21, xa = this.X(1)-15, xb = this.X(63)+19, dv = this.X(32);
+        s += `<path d="M${xa} ${sy1}H${xb}M${xa} ${sy2}H${xb}M${dv} 40V${sy1}M${dv} ${sy2}V430" stroke="#cfcfcf" stroke-width="1.3" fill="none"/>`;
+        
+        for(let r = -2; r <= 11; r++) {
+            for(let c = 1; c <= 63; c++) {
+                if(this.validHole(c,r)) s += `<use href="#hl" x="${this.X(c)}" y="${this.Y(r)}"/>`;
+            }
+        }
+        
+        const tx = (t,x,y,f,z) => `<text x="${x}" y="${y}" font-size="${z}" text-anchor="middle" fill="${f}" dominant-baseline="central">${t}</text>`;
+        for(let n = 1; n <= 60; n++) if(n==1 || n%5==0) s += tx(n, this.X(n+2), this.Y(0)-this.P, '#959595', 11) + tx(n, this.X(n+2), this.Y(9)+this.P*1.1, '#959595', 11);
+        'ABCDEFGHIJ'.split('').forEach((l,r) => s += tx(l, this.X(1)-18, this.Y(r), '#8f8f8f', 10.5) + tx(l, this.X(63)+18, this.Y(r), '#8f8f8f', 10.5));
+        [[-2,'−','#75AADB'], [-1,'+','#E58A8A'], [10,'−','#75AADB'], [11,'+','#E58A8A']].forEach(([r,t,c]) => s += tx(t, this.X(2), this.Y(r), c, 17));
+        
+        const wire = (pts, c, ends, netName = "unknown") => {
+            const d = pts.map(p => p.join(',')).join(' ');
+            return `<g class="wire" data-net="${netName}">
+                        <polyline points="${d}" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                        <polyline points="${d}" fill="none" stroke="${c}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`+
+                    (ends ? [pts[0], pts[pts.length-1]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4.2" fill="#fff" stroke="${c}" stroke-width="2"/>`).join('') : '') +
+                    `</g>`;
+        };
+        
+        const hop = (r,c, net) => wire([[this.X(31), this.Y(r)], [this.X(33), this.Y(r)]], c, 1, net);
+        const pwSet = new Set(data.pw || []);
+        if(pwSet.has('VCC')) { const c = '#d62828'; s += hop(-1,c, 'VCC') + hop(11,c, 'VCC') + wire([[this.X(3), this.Y(-1)], [this.X(1)-34, this.Y(-1)], [this.X(1)-34, this.Y(11)], [this.X(3), this.Y(11)]], c, 1, 'VCC'); }
+        if(pwSet.has('GND')) { const c = '#2b2b2b'; s += hop(-2,c, 'GND') + hop(10,c, 'GND') + wire([[this.X(61), this.Y(-2)], [this.X(63)+34, this.Y(-2)], [this.X(63)+34, this.Y(10)], [this.X(61), this.Y(10)]], c, 1, 'GND'); }
+        
+        // VẼ IC
+        if (data.ics) {
+            for (const ic of data.ics) {
+                const x1 = this.X(ic.cMin) - this.P * 0.45;
+                const width = (ic.w - 1) * this.P + this.P * 0.9; 
+                const y = this.Y(4) - 6; 
+                const h = this.Y(5) - this.Y(4) + 12; 
+                const cx = this.X(ic.cMin + (ic.w - 1) / 2); 
+                const cy = (this.Y(4) + this.Y(5)) / 2;
+                const notchX = ic.rot ? (x1 + width) : x1;
+
+                s += `<g class="cmp" data-id="${ic.id}" filter="url(#sh)">
+                        <rect x="${x1}" y="${y}" width="${width}" height="${h}" rx="3" fill="#2b2f36"/>
+                        <circle cx="${notchX}" cy="${y + h/2}" r="6" fill="#15181d"/>`;
+                        
+                for (let c = ic.cMin; c <= ic.cMax; c++) {
+                    s += `<rect x="${this.X(c)-3}" y="${this.Y(4)-3}" width="6" height="6" fill="#c9ccd1"/>`;
+                    s += `<rect x="${this.X(c)-3}" y="${this.Y(5)-3}" width="6" height="6" fill="#c9ccd1"/>`;
+                    
+                    let pinNumBot, pinNumTop;
+                    if (ic.rot) {
+                        pinNumTop = ic.cMax - c + 1;
+                        pinNumBot = (ic.pins / 2) + (c - ic.cMin) + 1;
+                    } else {
+                        pinNumBot = c - ic.cMin + 1;
+                        pinNumTop = ic.pins - (c - ic.cMin);
+                    }
+                    s += `<text x="${this.X(c)}" y="${this.Y(5)+11}" font-size="8" text-anchor="middle" fill="#9aa1ab">${pinNumBot}</text>`;
+                    s += `<text x="${this.X(c)}" y="${this.Y(4)-6}" font-size="8" text-anchor="middle" fill="#9aa1ab">${pinNumTop}</text>`;
+                }
+                s += `<text x="${cx}" y="${cy+4}" font-size="11" font-weight="600" text-anchor="middle" fill="#fff">${ic.id}</text></g>`;
+            }
+        }
+
+        // VẼ SWITCH
+        if (data.sws) {
+            for (const sw of data.sws) {
+                const x1 = this.X(sw.cMin) - this.P * 0.55; 
+                const width = 2 * this.P + this.P * 1.1; 
+                const y = this.Y(sw.row) - this.P * 0.7; 
+                const h = this.P * 1.4;
+                s += `<g class="cmp" data-id="${sw.id}" filter="url(#sh)">
+                        <rect x="${x1}" y="${y}" width="${width}" height="${h}" rx="3" fill="#fff" stroke="#cfcbc0" stroke-width="1.5"/>
+                        <rect x="${x1 + 3}" y="${y + 3}" width="${width - 6}" height="${h - 6}" rx="2" fill="#2f3235"/>`;
+                for (let c = sw.cMin; c <= sw.cMax; c++) {
+                    s += `<rect x="${this.X(c)-3.5}" y="${this.Y(sw.row)-3.5}" width="7" height="7" fill="#c9ccd1"/>`;
+                    s += `<circle cx="${this.X(c)}" cy="${this.Y(sw.row)}" r="1.5" fill="#2b2f36"/>`;
+                }
+                const sliderX = this.X(sw.cMin + 1) - 6;
+                const sliderY = this.Y(sw.row) - 6;
+                s += `<rect x="${sliderX}" y="${sliderY}" width="12" height="12" rx="2" fill="#e8e8e8" stroke="#a0a0a0" stroke-width="1"/>`;
+                const cx = this.X(sw.cMin + 1);
+                s += `<text x="${cx}" y="${y - 6}" font-size="10" font-weight="600" text-anchor="middle" fill="#667379">${sw.id}</text></g>`;
+            }
+        }
+
+        // VẼ NÚT BẤM (BTN2 hỗ trợ 3 trạng thái bend: -1, 0, +1) (#2)
+        if (data.btns) {
+            for (const btn of data.btns) {
+                const cx = this.X(btn.cMin + 1);
+                const rPin = btn.rowTop === 7 && btn.rowBot === 8 ? 8 : btn.rowTop;
+                const bend = btn.bend !== undefined ? btn.bend : 0;
+                // Dịch chuyển tâm nút bấm theo trạng thái bẻ chân
+                const cy = bend === -1 ? this.Y(rPin) - 8 : (bend === 1 ? this.Y(rPin) + 8 : this.Y(rPin));
+
+                s += `<g class="cmp" data-id="${btn.id}" filter="url(#sh)">`;
+                const x1 = this.X(btn.cMin) - this.P * 0.45;
+                const width = 2 * this.P + this.P * 0.9;
+                const y = bend === -1 ? this.Y(rPin) - 18 : (bend === 1 ? this.Y(rPin) - 6 : this.Y(rPin) - 12);
+                const h = 24;
+                s += `<rect x="${x1}" y="${y}" width="${width}" height="${h}" rx="3" fill="#cfd2d4" stroke="#9ea2a5" stroke-width="1.5"/>`;
+                s += `<circle cx="${cx}" cy="${cy}" r="10" fill="#2f3235"/>`;
+
+                const drawLeg = (c, r) => {
+                    s += `<rect x="${this.X(c)-3.5}" y="${this.Y(r)-3.5}" width="7" height="7" fill="#c9ccd1"/>`;
+                    s += `<circle cx="${this.X(c)}" cy="${this.Y(r)}" r="1.5" fill="#2b2f36"/>`;
+                };
+                drawLeg(btn.cMin, rPin); drawLeg(btn.cMax, rPin);
+                s += `<text x="${cx}" y="${cy+3.5}" font-size="9" font-weight="600" text-anchor="middle" fill="#fff">${btn.id}</text></g>`;
+            }
+        }
+
+        // VẼ DÂY ĐIỆN
+        if (data.w) {
+            for (const w of data.w) {
+                const [p1, p2] = w.cells;
+                const [c1, r1] = p1, [c2, r2] = p2;
+                const isHorizontal = (r1 === r2 && c1 !== c2);
+                if (isHorizontal) {
+                    const row = r1;
+                    const chosenLane = w.lane !== undefined ? w.lane : 0;
+                    if (chosenLane === 0) {
+                        s += wire([[this.X(c1), this.Yl(r1)], [this.X(c2), this.Yl(r2)]], nc(w.net), 1, w.net);
+                    } else {
+                        const offset = chosenLane * (this.P * 0.45);
+                        const yCenter = this.Yl(row), yOffset = yCenter + offset;
+                        const pathPts = [[this.X(c1), yCenter], [this.X(c1), yOffset], [this.X(c2), yOffset], [this.X(c2), yCenter]];
+                        s += wire(pathPts, nc(w.net), 1, w.net);
+                    }
+                } else {
+                    s += wire(w.cells.map(([c, r]) => [this.X(c), this.Yl(r)]), nc(w.net), 1, w.net);
+                }
+            }
+        }
+
+        // VẼ ĐIỆN TRỞ (R)
+        if (data.rs) {
+            for (const r of data.rs) {
+                const x1 = this.X(r.c1), y1 = this.Y(r.r1), x2 = this.X(r.c2), y2 = this.Y(r.r2);
+                const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                const ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                const body = `<rect x="-17" y="-5.5" width="34" height="11" rx="5" fill="#e6cf97" stroke="#a38a4a"/>
+                              <rect x="-9" y="-5.5" width="3" height="11" fill="#7a3b12"/>
+                              <rect x="-3" y="-5.5" width="3" height="11" fill="#111"/>
+                              <rect x="3" y="-5.5" width="3" height="11" fill="#d98a1b"/>`;
+                s += `<g class="cmp" data-id="${r.id}">
+                        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9a9a9a" stroke-width="2.5"/>
+                        <circle cx="${x1}" cy="${y1}" r="3.5" fill="#9a9a9a"/><circle cx="${x2}" cy="${y2}" r="3.5" fill="#9a9a9a"/>
+                        <g transform="translate(${mx},${my}) rotate(${ang}) scale(1.1)" filter="url(#sh)">${body}</g>
+                        <text x="${mx}" y="${my - 12}" font-size="10" font-weight="600" text-anchor="middle" fill="#667379">${r.id}</text></g>`;
+            }
+        }
+
+        // VẼ LED
+        if (data.leds) {
+            for (const l of data.leds) {
+                const x1 = this.X(l.c1), y1 = this.Y(l.r1), x2 = this.X(l.c2), y2 = this.Y(l.r2);
+                const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                const ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                const body = `<path d="M-5,-6 Q12,-6 12,0 Q12,6 -5,6 Z" fill="#ff4d4d" stroke="#cc0000" stroke-width="1"/>
+                              <rect x="-8" y="-7" width="3" height="14" fill="#cc0000"/>`;
+                s += `<g class="cmp" data-id="${l.id}">
+                        <line x1="${x1}" y1="${y1}" x2="${mx - 8 * Math.cos(ang * Math.PI / 180)}" y2="${my - 8 * Math.sin(ang * Math.PI / 180)}" stroke="#9a9a9a" stroke-width="2.5"/>
+                        <line x1="${x2}" y1="${y2}" x2="${mx + 8 * Math.cos(ang * Math.PI / 180)}" y2="${my + 8 * Math.sin(ang * Math.PI / 180)}" stroke="#9a9a9a" stroke-width="2.5"/>
+                        <circle cx="${x1}" cy="${y1}" r="3.5" fill="#9a9a9a"/><circle cx="${x2}" cy="${y2}" r="3.5" fill="#9a9a9a"/>
+                        <text x="${x1}" y="${y1 - 6}" font-size="9" font-weight="bold" fill="#d62828" text-anchor="middle">+</text>
+                        <text x="${x2}" y="${y2 - 6}" font-size="9" font-weight="bold" fill="#2b2b2b" text-anchor="middle">-</text>
+                        <g transform="translate(${mx},${my}) rotate(${ang}) scale(1.1)" filter="url(#sh)">${body}</g>
+                        <text x="${mx}" y="${my - 12}" font-size="10" font-weight="600" text-anchor="middle" fill="#667379">${l.id}</text></g>`;
+            }
+        }
+        
+        // VẼ TỤ ĐIỆN (C, CC)
+        if (data.cs) {
+            for (const c of data.cs) {
+                const x1 = this.X(c.c1), y1 = this.Y(c.r1), x2 = this.X(c.c2), y2 = this.Y(c.r2);
+                const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                const ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                const isCeramic = c.type === 'CC' || c.id.startsWith('CC');
+                const body = isCeramic
+                    ? `<ellipse cx="0" cy="0" rx="10.5" ry="6" fill="#f59e0b" stroke="#b45309" stroke-width="1.2"/>
+                       <path d="M-6,-2.2 Q0,-4.2 6,-2.2" fill="none" stroke="#fef3c7" stroke-width="1.2" stroke-linecap="round"/>`
+                    : `<rect x="-11" y="-6.5" width="22" height="13" rx="3.5" fill="#1e3a8a" stroke="#172554" stroke-width="1"/>
+                       <rect x="4" y="-6.5" width="5" height="13" rx="1" fill="#cbd5e1"/>
+                       <line x1="6.5" y1="-4" x2="6.5" y2="4" stroke="#1e293b" stroke-width="1.2"/>`;
+                const polMarks = isCeramic ? '' : `
+                        <text x="${x1}" y="${y1 - 6}" font-size="9" font-weight="bold" fill="#d62828" text-anchor="middle">+</text>
+                        <text x="${x2}" y="${y2 - 6}" font-size="9" font-weight="bold" fill="#2b2b2b" text-anchor="middle">-</text>`;
+                s += `<g class="cmp" data-id="${c.id}">
+                        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9a9a9a" stroke-width="2.5"/>
+                        <circle cx="${x1}" cy="${y1}" r="3.5" fill="#9a9a9a"/><circle cx="${x2}" cy="${y2}" r="3.5" fill="#9a9a9a"/>${polMarks}
+                        <g transform="translate(${mx},${my}) rotate(${ang}) scale(1.08)" filter="url(#sh)">${body}</g>
+                        <text x="${mx}" y="${my - 12}" font-size="10" font-weight="600" text-anchor="middle" fill="#667379">${c.id}</text></g>`;
+            }
+        }
+
+        s = s.replace(/<g class="cmp" data-id="([^"]+)"/g, (m, id) => `<g class="cmp" data-id="${id}" data-nets="${((data.nets && data.nets[id]) || []).join(' ')}"`);
+        document.getElementById(containerId).innerHTML = s + '</svg>';
+
+        const svgEl = document.querySelector(`#${containerId} svg`);
+        svgEl.addEventListener('click', (e) => {
+            const t = e.target.closest('.cmp, .wire');
+            svgEl.classList.remove('has-highlight');
+            svgEl.querySelectorAll('.highlighted').forEach(el => el.classList.remove('highlighted'));
+            if (!t) return;
+            svgEl.classList.add('has-highlight'); t.classList.add('highlighted');
+            const isWire = t.classList.contains('wire');
+            const nets = isWire ? [t.dataset.net] : (t.dataset.nets || '').split(' ').filter(Boolean);
+            svgEl.querySelectorAll('.wire').forEach(w => { if (nets.includes(w.dataset.net)) w.classList.add('highlighted'); });
+            if (isWire) svgEl.querySelectorAll('.cmp').forEach(c => { if ((c.dataset.nets || '').split(' ').includes(t.dataset.net)) c.classList.add('highlighted'); });
+        });
+    }
+};
+
+let solutions = [], pool = [], poolSeen = new Set(), poolKey = '', runId = 0, curTab = 0, isPaused = false;
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+const SearchLogger = {
+    data: null,
+    reset(fresh, parsed) {
+        if (!fresh && this.data) return;
+        this.data = {
+            startTime: new Date().toISOString(),
+            totalNets: parsed ? parsed.nets.length : 0,
+            iterations: 0, uniqueConfigs: 0, duplicates: 0, elapsedMs: 0,
+            phaseCounts: { init: 0, p1_unblock: 0, p1_bridge: 0, p2_ortho: 0, p3_compact: 0, diversify: 0 },
+            errTypes: { rled_unplaced: 0, rail_blocked: 0, sig_congested: 0, short_circuit: 0 },
+            netFails: {}, compFails: {}, colHotspots: {},
+            milestones: [], bestSnap: null
+        };
+    },
+    record(r, o, it, elapsed, phase, isDup) {
+        const d = this.data; if (!d) return;
+        d.iterations = it; d.elapsedMs = Math.round(elapsed);
+        if (isDup) d.duplicates++; else d.uniqueConfigs++;
+        if (d.phaseCounts[phase] !== undefined) d.phaseCounts[phase]++;
+    },
+    showModal() {}
+};
+
+const layoutSig = r => JSON.stringify([r.L.ics, r.L.sws, r.L.btns]);
+const solSig = r => JSON.stringify([r.L, r.wires.map(w => [w.net, w.cells, w.lane || 0]), r.errors.length ? r.errors : 0]);
+
+const cmpSolutions = (a, b) => {
+    if (a.unplaced !== b.unplaced) return a.unplaced - b.unplaced;
+    if (a.errors.length !== b.errors.length) return a.errors.length - b.errors.length;
+    if (a.errors.length > 0) {
+        if (a.score !== b.score) return a.score - b.score;
+        return b.orthoCount - a.orthoCount;
+    }
+    if (b.orthoCount !== a.orthoCount) return b.orthoCount - a.orthoCount;
+    return (a.len + a.wires.length * 3.5 + a.maxC * 0.5) - (b.len + b.wires.length * 3.5 + b.maxC * 0.5);
+};
+
+function pickTop(k = 5) {
+    const sorted = pool.slice().sort(cmpSolutions);
+    const out = [], usedLayout = new Set(), usedPersona = new Set();
+    for (const r of sorted) {
+        const s = layoutSig(r), p = r.persona || '';
+        if (!usedLayout.has(s) && !usedPersona.has(p)) {
+            usedLayout.add(s); usedPersona.add(p); out.push(r);
+            if (out.length === k) return out;
+        }
+    }
+    for (const r of sorted) {
+        if (out.length >= k) break;
+        if (!out.includes(r)) out.push(r);
+    }
+    return out;
+}
+
+// ==========================================
+// KẾT NỐI WASM & BỘ GIẢI ĐA LUỒNG (WASM-BRIDGE)
+// ==========================================
+let wasmSolver = null;
+let isWasmLoaded = false;
+
+async function initWasmBridge() {
+    if (isWasmLoaded) return true;
+    try {
+        if (typeof wasm_bindgen !== 'undefined') {
+            await wasm_bindgen();
+            isWasmLoaded = true;
+            console.log("✓ BSE-WASM Engine loaded successfully.");
+            return true;
+        }
+    } catch (e) {
+        console.warn("WASM load warning:", e);
+    }
+    return false;
+}
+
+function syncComponentsFromNetlist(text) {
+    if (!text || !text.trim()) return;
+    const byId = new Set(components.map(c => c.id));
+    const maxPin = {}, orderIds = [];
+    text.split(/\r?\n/).forEach(raw => {
+        const line = raw.replace(/(#|\/\/).*$/, '').trim();
+        if (!line) return;
+        line.toUpperCase().replace(/→/g, '->').split(/[\s,;=]+/).forEach(tok => {
+            if (!tok || tok === '->' || tok === '-' || tok === 'VCC' || tok === 'GND' || tok.startsWith('*')) return;
+            const cleanTok = tok.replace(/:$/, '');
+            const m = cleanTok.match(/^([A-Z]+\d+)(?::(A|K|\+|-|\d+))?$/);
+            if (!m) return;
+            const id = m[1];
+            const p = (!m[2] || m[2] === 'A' || m[2] === '+') ? 1 : (m[2] === 'K' || m[2] === '-') ? 2 : +m[2];
+            if (!maxPin[id]) { maxPin[id] = p; orderIds.push(id); }
+            else if (p > maxPin[id]) maxPin[id] = p;
+        });
+    });
+    let added = false;
+    orderIds.forEach(id => {
+        if (byId.has(id)) return;
+        const mp = maxPin[id] || 2;
+        if (id.startsWith('U') || id.startsWith('IC')) {
+            const pins = Math.max(8, Math.ceil(mp / 2) * 2);
+            components.push({ id, type: 'IC', pins: pins <= 14 ? 14 : pins, rot: 0, pwrMode: 'default', vccPin: pins <= 14 ? 14 : pins, gndPin: (pins <= 14 ? 14 : pins) / 2 });
+        } else if (id.startsWith('SW') || id.startsWith('S')) {
+            components.push({ id, type: 'SW', pins: 3 });
+        } else if (id.startsWith('BTN') || id.startsWith('B')) {
+            components.push({ id, type: 'BTN2', pins: 2 });
+        } else if (id.startsWith('R')) {
+            components.push({ id, type: 'R', pins: 2 });
+        } else if (id.startsWith('L')) {
+            components.push({ id, type: 'LED', pins: 2 });
+        } else if (id.startsWith('CC')) {
+            components.push({ id, type: 'CC', pins: 2 });
+        } else if (id.startsWith('C')) {
+            components.push({ id, type: 'C', pins: 2 });
+        } else return;
+        byId.add(id);
+        added = true;
+    });
+    if (added) renderComponents();
+}
+
+async function solveAsync(fresh, budget) {
+    const my = ++runId;
+    let elapsed = 0, lastTick = performance.now();
+    $('btn-pause').style.display = 'flex'; setPauseUI(false);
+    isPaused = false;
+
+    syncComponentsFromNetlist($('netlist-input').value);
+    const useStarHub = !!($('chk-star-hub') && $('chk-star-hub').checked);
+    const symLedActive = !!($('chk-sym-led') && $('chk-sym-led').checked);
+    const symLedSpec = symLedActive && $('sym-led-input') ? $('sym-led-input').value : '';
+
+    const key = JSON.stringify([components, $('netlist-input').value, useStarHub, symLedSpec]);
+    const isNew = fresh || key !== poolKey;
+    if (isNew) { pool = []; poolSeen = new Set(); poolKey = key; }
+
+    const wasmOk = await initWasmBridge();
+    if (wasmOk && typeof wasm_bindgen.WasmSolver !== 'undefined') {
+        const compsJson = JSON.stringify(components);
+        const netlistTxt = $('netlist-input').value;
+        const seed = (Date.now() + pool.length * 7919) >>> 0;
+        
+        try {
+            wasmSolver = wasm_bindgen.WasmSolver.new_with_sym_led(compsJson, netlistTxt, symLedSpec, useStarHub, seed, null);
+        } catch (e) {
+            console.warn("WASM Solver init fallback:", e);
+            wasmSolver = new wasm_bindgen.WasmSolver(compsJson, netlistTxt, useStarHub, seed, null);
+        }
+
+        let shown = false;
+        while (my === runId && (budget === -1 || elapsed < budget)) {
+            if (isPaused) { await new Promise(r => setTimeout(r, 100)); lastTick = performance.now(); continue; }
+            
+            const stepJson = wasmSolver.step_batch(4, elapsed);
+            const stepRes = JSON.parse(stepJson);
+            const topJson = wasmSolver.get_top_solutions(5);
+            solutions = JSON.parse(topJson);
+            pool = solutions.slice();
+
+            const now = performance.now();
+            elapsed += (now - lastTick); lastTick = now;
+
+            if (solutions.length > 0) {
+                if (!shown || curTab === 0) { showSolution(0); shown = true; }
+                else renderTabs(curTab);
+                const t = solutions[0];
+                const timeStr = budget === -1 ? `${Math.round(elapsed / 1000)}s` : `còn ${Math.max(0, Math.round((budget - elapsed) / 1000))}s`;
+                $('prog').textContent = `(Rust+WASM V2 · ${stepRes.iterations} vòng · ${timeStr}) → Best: ${t.unplaced ? 'thiếu ' + t.unplaced : t.errors.length + ' lỗi, ' + t.orthoCount + ' thẳng'}`;
+            }
+            await new Promise(r => setTimeout(r, 4));
+            lastTick = performance.now();
+        }
+        $('btn-pause').style.display = 'none';
+        if (solutions.length > 0) { showSolution(0); }
+        return;
+    }
+
+    // Fallback nếu không tải được WASM
+    $('prog').textContent = 'Không tải được BSE-WASM engine. Hãy kiểm tra lại file wasm-bridge.js và file .wasm';
+}
+
+function renderTabs(i) {
+    $('tabs').innerHTML = solutions.map((x, k) => {
+        const pBadge = x.persona ? x.persona.split(':')[0] : `PA`;
+        const bad = x.unplaced || x.errors.length;
+        return `<button class="tab${bad ? ' bad' : ''}${k === i ? ' on' : ''}" data-sol="${k}" role="tab" aria-selected="${k === i}"><span class="tab-t">PA ${k + 1}<em>${pBadge}</em></span><small>${x.unplaced ? 'thiếu ' + x.unplaced : x.errors.length ? x.errors.length + ' lỗi' : x.orthoCount + ' thẳng · ' + x.wires.length + ' dây'}</small></button>`;
+    }).join('');
+}
+
+function showSolution(i) {
+    const s = solutions[i]; if (!s) return; curTab = i;
+    BreadboardRenderer.render('breadboard-container', {
+        pw: ['VCC', 'GND'],
+        ics: s.L.ics, sws: s.L.sws, btns: s.L.btns,
+        rs: s.L.rs, leds: s.L.leds, cs: s.L.cs,
+        w: s.wires, nets: s.compNets
+    });
+    renderTabs(i);
+    $('log').innerHTML =
+        s.errors.map(m => `<div class="logline lg-err">${esc(m)}</div>`).join('') +
+        s.warns.map(m => `<div class="logline lg-warn">${esc(m)}</div>`).join('') +
+        (s.errors.length ? '' : `<div class="logline lg-ok">PA ${i + 1}: ${s.nets} net, ${s.wires.length} dây, dài ${s.len} ô, rộng ${s.maxC} cột</div>`);
+}
+
+let LiveControl = { triggerTabuJump: null, triggerDeepSurgery: null };
+
+SearchLogger.buildTextReport = function () {
+    return this._wasmReport || 'Chưa có dữ liệu tìm kiếm. Hãy bấm RENDER BREADBOARD trước.';
+};
+SearchLogger.showModal = function () {
+    let m = $('search-log-modal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'search-log-modal';
+        m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+        m.innerHTML = [
+            '<div class="modal-card">',
+            '  <div class="modal-h"><h3>Nhật ký chẩn đoán tìm kiếm<span class="count">Rust + WASM</span></h3>',
+            '    <div class="acts">',
+            '      <button id="log-copy" class="btn sm"><svg class="i"><use href="#i-copy"/></svg><span>Sao chép</span></button>',
+            '      <button id="log-txt" class="btn sm"><svg class="i"><use href="#i-download"/></svg><span>Tải .txt</span></button>',
+            '      <button id="log-json" class="btn sm"><svg class="i"><use href="#i-download"/></svg><span>Tải .json</span></button>',
+            '      <button id="log-close" class="btn sm icon quiet" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button>',
+            '    </div>',
+            '  </div>',
+            '  <div class="modal-b"><textarea id="log-report-area" class="term" readonly spellcheck="false"></textarea></div>',
+            '</div>'
+        ].join('');
+        document.body.appendChild(m);
+        $('log-close').onclick = () => m.style.display = 'none';
+        m.onclick = e => { if (e.target === m) m.style.display = 'none'; };
+        $('log-copy').onclick = () => {
+            navigator.clipboard.writeText(this.buildTextReport());
+            $('log-copy').querySelector('span').textContent = 'Đã sao chép';
+            setTimeout(() => $('log-copy').querySelector('span').textContent = 'Sao chép', 1500);
+        };
+        const dl = (content, ext, mime) => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+            a.download = 'breadboard_search_log_' + Date.now() + '.' + ext;
+            a.click();
+        };
+        $('log-txt').onclick = () => dl(this.buildTextReport(), 'txt', 'text/plain;charset=utf-8');
+        $('log-json').onclick = () => dl(JSON.stringify(this.data || {}, null, 2), 'json', 'application/json;charset=utf-8');
+    }
+    m.querySelector('textarea').value = this.buildTextReport();
+    m.style.display = 'flex';
+};
+
+const NetlistGuide = {
+    PROMPT_TEXT: `Hãy đóng vai chuyên gia thiết kế mạch số trên Breadboard. Hãy xuất Netlist theo đúng chuẩn BSE-Netlist V2 với các quy tắc sau:
+1. Khai báo nguồn IC: VCC U1:14 U2:14; GND U1:7 U2:7
+2. Chuỗi nối tiếp dùng mũi tên (->): U1:3 -> R1 -> L1 -> GND
+3. Cực tính linh kiện 2 chân phân cực (LED L, Tụ hóa C): Chân 1 (hoặc A/+) = Dương (+), Chân 2 (hoặc K/-) = Âm (-).
+4. Mạch nhánh RC / Nút bấm tại chân IC viết tách câu tại chân IC: VCC -> R5 -> U1:1 -> C1 -> GND; U1:1 -> B1:1; B1:2 -> GND
+5. Mạng xung nhịp hoặc chân nhạy cảm thêm dấu * ở đầu tên mạng: *CLK: U1:2 -> U2:3 -> U2:11
+6. Nếu có các cặp LED cần đặt đối xứng gương/thẳng hàng, thêm dòng: #SYM_LED: L1=L2, L3=L4
+Chỉ trả về khối code Netlist thuần túy, không giải thích dài dòng.`,
+    renderAudit() {
+        const box = $('ng-audit'); if (!box) return;
+        const r = lintNetlist($('netlist-input').value);
+        if (r.empty) { box.innerHTML = '<div class="audit"><b>Chưa có netlist để kiểm tra.</b> Nhập netlist ở khung bên trái rồi bấm Kiểm tra lại.</div>'; return; }
+        if (r.fatal) { box.innerHTML = `<div class="audit bad"><div class="audit-h"><svg class="i"><use href="#i-alert"/></svg><b>Không phân tích được netlist</b></div><div>${esc(r.fatal)}</div></div>`; return; }
+        const ok = r.errors.length === 0;
+        box.innerHTML = `<div class="audit ${ok ? 'ok' : 'bad'}">
+            <div class="audit-h"><svg class="i"><use href="#i-${ok ? 'check' : 'alert'}"/></svg><b>${ok ? 'Netlist hợp lệ, không có lỗi mạch' : 'Phát hiện ' + r.errors.length + ' lỗi'}</b></div>
+            <div class="chips"><span class="chip">${r.nets} mạng điện</span><span class="chip">${r.two} mạng 2 cực</span><span class="chip">${r.star} mạng nhạy cảm *</span><span class="chip">${r.used}/${r.total} linh kiện đã nối</span></div>
+            ${ok ? '' : `<ul class="alist">${r.errors.map(m => `<li>${esc(m)}</li>`).join('')}</ul>`}
+            ${r.unused.length ? `<div class="audit-n">Chưa nối: ${r.unused.map(esc).join(', ')}</div>` : ''}
+        </div>`;
+    },
+    showModal() {
+        let m = $('netlist-guide-modal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'netlist-guide-modal';
+            m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+            m.innerHTML = [
+                '<div class="modal-card">',
+                '  <div class="modal-h"><h3>Chuẩn Netlist và kiểm tra</h3>',
+                '    <button id="ng-close" class="btn sm icon quiet" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button>',
+                '  </div>',
+                '  <div class="modal-b">',
+                '    <div class="sub"><span>Kiểm tra netlist hiện tại</span><button id="ng-recheck" class="btn sm"><svg class="i"><use href="#i-rotate"/></svg><span>Kiểm tra lại</span></button></div>',
+                '    <div id="ng-audit"></div>',
+                '    <div class="sub"><span>Quy chuẩn cú pháp</span></div>',
+                '    <ul class="guide">',
+                '      <li><b>Chuỗi nối tiếp (<code>-></code>):</b> <code>U1:1 -> R1 -> L1 -> GND</code> (tự động hiểu vào chân 1, ra chân 2).</li>',
+                '      <li><b>Nhánh RC / nút bấm tại chân IC:</b> viết tách câu bằng dấu <code>;</code> tại chân IC: <code>VCC -> R1 -> U1:1 -> C1 -> GND; U1:1 -> B1:1; B1:2 -> GND</code>.</li>',
+                '      <li><b>Chân nhạy cảm / xung nhịp (<code>*</code>):</b> <code>*CLK: U1:2 -> U2:3 -> U2:11</code> (tự động gom qua cột trung gian Star-Hub).</li>',
+                '      <li><b>Cực tính LED và tụ phân cực (<code>C</code>):</b> chân <code>1</code> (hoặc <code>A</code>, <code>+</code>) = dương (+), chân <code>2</code> (hoặc <code>K</code>, <code>-</code>) = âm (-).</li>',
+                '      <li><b>LED đối xứng (<code>#SYM_LED</code>):</b> bật công tắc LED đối xứng hoặc ghi trực tiếp <code>#SYM_LED: L1=L2, L3=L4</code> trong Netlist.</li>',
+                '    </ul>',
+                '    <div class="sub"><span>Prompt mẫu để yêu cầu ChatGPT / Claude / Gemini xuất Netlist chuẩn</span>',
+                '      <button id="ng-copy" class="btn sm primary"><svg class="i"><use href="#i-copy"/></svg><span>Sao chép prompt</span></button>',
+                '    </div>',
+                '    <textarea id="ng-prompt-area" class="prompt" readonly spellcheck="false"></textarea>',
+                '  </div>',
+                '</div>'
+            ].join('');
+            document.body.appendChild(m);
+            $('ng-close').onclick = () => m.style.display = 'none';
+            $('ng-recheck').onclick = () => this.renderAudit();
+            m.onclick = e => { if (e.target === m) m.style.display = 'none'; };
+            $('ng-copy').onclick = () => {
+                navigator.clipboard.writeText(this.PROMPT_TEXT);
+                $('ng-copy').querySelector('span').textContent = 'Đã sao chép';
+                setTimeout(() => $('ng-copy').querySelector('span').textContent = 'Sao chép prompt', 1500);
+            };
+        }
+        m.querySelector('#ng-prompt-area').value = this.PROMPT_TEXT;
+        this.renderAudit();
+        m.style.display = 'flex';
+    }
+};
+
+const KnowledgeBank = {
+    KB_STORAGE_KEY: 'breadboard_smart_kb_v2',
+    seeds: [],
+    loadFromStorage() {
+        try {
+            const raw = localStorage.getItem(this.KB_STORAGE_KEY);
+            if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) this.seeds = arr.slice(0, 80); }
+        } catch (_) {}
+    },
+    saveToStorage() {
+        try { localStorage.setItem(this.KB_STORAGE_KEY, JSON.stringify(this.seeds.slice(0, 50))); } catch (_) {}
+    },
+    addSeed(dna, persist = true) {
+        if (!dna) return false;
+        const sig = dna.var_sig || dna.varSig || JSON.stringify([dna.macro_ids || dna.macroIds, dna.rot, dna.half]);
+        if (this.seeds.some(s => (s.var_sig || s.varSig || JSON.stringify([s.macro_ids || s.macroIds, s.rot, s.half])) === sig)) return false;
+        this.seeds.push(dna);
+        this.seeds.sort((a, b) => ((a.err_count ?? a.errCount ?? 99) - (b.err_count ?? b.errCount ?? 99)) || ((a.score || 0) - (b.score || 0)));
+        if (this.seeds.length > 80) this.seeds.length = 80;
+        if (persist) this.saveToStorage();
+        return true;
+    },
+    showManagerModal() {
+        $('file-learn-input').click();
+    }
+};
+KnowledgeBank.loadFromStorage();
+
+const StateManager = {
+    STORAGE_KEY: 'breadboard_autorouter_state_v1',
+    pack() {
+        return {
+            version: 1, savedAt: new Date().toISOString(),
+            components, netlist: $('netlist-input').value,
+            symLedChecked: !!($('chk-sym-led') && $('chk-sym-led').checked),
+            symLedSpec: $('sym-led-input') ? $('sym-led-input').value : '',
+            curTab, solutions, learnedSeeds: KnowledgeBank.seeds,
+            progText: $('prog').textContent, logData: SearchLogger.data
+        };
+    },
+    apply(state) {
+        if (!state || !Array.isArray(state.components) || !state.components.length) return false;
+        runId++; $('btn-pause').style.display = 'none'; isPaused = false;
+        components = state.components.map(c => Object.assign({}, c));
+        renderComponents();
+        $('netlist-input').value = state.netlist !== undefined ? state.netlist : '';
+        if (typeof updateNetStatus === 'function') updateNetStatus();
+        if ($('chk-sym-led') && state.symLedChecked !== undefined) {
+            $('chk-sym-led').checked = !!state.symLedChecked;
+            $('sym-led-row').style.display = $('chk-sym-led').checked ? 'flex' : 'none';
+        }
+        if ($('sym-led-input') && state.symLedSpec !== undefined) $('sym-led-input').value = state.symLedSpec;
+        if (Array.isArray(state.learnedSeeds)) state.learnedSeeds.forEach(s => KnowledgeBank.addSeed(s, false));
+        KnowledgeBank.saveToStorage();
+        if (Array.isArray(state.solutions) && state.solutions.length) {
+            solutions = state.solutions; pool = state.solutions.slice();
+            poolSeen = new Set(pool.map(r => r.sig || solSig(r)));
+            if (state.logData) SearchLogger.data = state.logData;
+            showSolution((state.curTab >= 0 && state.curTab < solutions.length) ? state.curTab : 0);
+            $('prog').textContent = state.progText || `Đã nạp cấu hình (${solutions.length} PA).`;
+            return true;
+        }
+        return false;
+    },
+    autoSave() {
+        try { if (components.length && solutions.length) localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.pack())); } catch (_) {}
+    },
+    autoRestore() {
+        try { const raw = localStorage.getItem(this.STORAGE_KEY); return raw ? this.apply(JSON.parse(raw)) : false; } catch (_) { return false; }
+    },
+    saveToFile() {
+        if (!components.length && !solutions.length) { toast('Chưa có cấu hình nào để lưu!'); return; }
+        const blob = new Blob([JSON.stringify(this.pack(), null, 2)], { type: 'application/json;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'breadboard_config_' + Date.now() + '.json';
+        a.click();
+    },
+    loadFromFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try { if (this.apply(JSON.parse(e.target.result))) this.autoSave(); }
+            catch (err) { toast('Lỗi đọc file JSON: ' + err.message); }
+        };
+        reader.readAsText(file);
+    },
+    learnFromFiles(fileList) {
+        if (!fileList || !fileList.length) return;
+        let left = fileList.length, added = 0;
+        Array.from(fileList).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const obj = JSON.parse(e.target.result || '{}');
+                    if (Array.isArray(obj.learnedSeeds)) obj.learnedSeeds.forEach(s => { if (KnowledgeBank.addSeed(s, false)) added++; });
+                } catch (_) {}
+                if (--left === 0) {
+                    KnowledgeBank.saveToStorage();
+                    $('prog').textContent = `Đã học thêm ${added} mẫu vào Kho Tri Thức (Tổng: ${KnowledgeBank.seeds.length} mẫu).`;
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+};
+
+function refreshBoard() {
+    syncComponentsFromNetlist($('netlist-input').value);
+    if (components.length === 0 && !$('netlist-input').value.trim()) {
+        BreadboardRenderer.render('breadboard-container', { pw: ['VCC', 'GND'] });
+        return;
+    }
+    return solveAsync(true, +$('tl').value);
+}
+
+$('tabs').onclick = e => { const b = e.target.closest('[data-sol]'); if (b) { showSolution(+b.dataset.sol); StateManager.autoSave(); } };
+$('btn-more').onclick = () => { syncComponentsFromNetlist($('netlist-input').value); solveAsync(false, +$('tl').value); };
+$('btn-log').onclick = () => SearchLogger.showModal();
+$('btn-save-file').onclick = () => StateManager.saveToFile();
+$('btn-load-file').onclick = () => $('file-load-input').click();
+$('btn-learn-file').onclick = () => KnowledgeBank.showManagerModal();
+$('file-load-input').onchange = e => { StateManager.loadFromFile(e.target.files[0]); e.target.value = ''; };
+$('file-learn-input').onchange = e => { StateManager.learnFromFiles(e.target.files); e.target.value = ''; };
+
+$('btn-pause').onclick = () => {
+    isPaused = !isPaused;
+    setPauseUI(isPaused);
+};
+
+$('btn-render').onclick = () => refreshBoard();
+
+if (!StateManager.autoRestore()) {
+    BreadboardRenderer.render('breadboard-container', { pw: ['VCC', 'GND'] });
+}
+
+if ($('btn-tabu-jump')) $('btn-tabu-jump').onclick = () => { if (LiveControl.triggerTabuJump) LiveControl.triggerTabuJump(); };
+if ($('btn-force-surg')) $('btn-force-surg').onclick = () => { if (LiveControl.triggerDeepSurgery) LiveControl.triggerDeepSurgery(); };
+if ($('btn-netlist-guide')) $('btn-netlist-guide').onclick = () => NetlistGuide.showModal();
+
+// ===== UI helpers (chỉ giao diện) =====
+function setPauseUI(p) {
+    const b = $('btn-pause');
+    b.classList.toggle('is-paused', p);
+    b.innerHTML = `<svg class="i"><use href="#i-${p ? 'play' : 'pause'}"/></svg>${p ? 'Tiếp tục' : 'Tạm dừng'}`;
+}
+function toast(msg) {
+    let t = $('toast');
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3500);
+}
+function parseNetlist(text, comps) {
+    const errors = [], warns = [], parent = {};
+    const byId = Object.fromEntries(comps.map(c => [c.id, c]));
+    const find = x => (parent[x] === undefined ? (parent[x] = x) : parent[x] === x ? x : (parent[x] = find(parent[x])));
+    const union = (a, b) => { parent[find(a)] = find(b); };
+
+    const normPinToken = tok => {
+        const m = tok.match(/^([A-Z]+\d+):(A|K|\+|-|\d+)$/);
+        if (!m) return tok;
+        const p = (m[2] === 'A' || m[2] === '+') ? '1' : (m[2] === 'K' || m[2] === '-') ? '2' : m[2];
+        return `${m[1]}:${p}`;
+    };
+
+    const statements = [];
+    text.split(/\r?\n/).forEach((rawLine, lineIdx) => {
+        const clean = rawLine.replace(/(#|\/\/).*$/, '').trim();
+        if (!clean) return;
+        clean.split(/[;,]+/).forEach(part => {
+            const s = part.trim();
+            if (s) statements.push({ text: s, ln: `Dòng ${lineIdx + 1}` });
+        });
+    });
+
+    statements.forEach(({ text: rawStmt, ln }) => {
+        let stmt = rawStmt;
+        let netLabel = null;
+
+        const mLabel = stmt.match(/^(\*?[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|:)\s*(.+)$/);
+        if (mLabel) {
+            const cand = mLabel[1].toUpperCase(), rest = mLabel[2].trim();
+            const isPinRef = byId[cand] && /^(?:\d+|A|K|\+|-)(?:\b|$)/i.test(rest);
+            if (!isPinRef) { netLabel = cand; stmt = rest; }
+        }
+
+        const hasArrow = /->|→/.test(stmt);
+        const rawToks = stmt.toUpperCase().replace(/→/g, '->').replace(/->/g, ' -> ').trim().split(/\s+/).filter(Boolean);
+        const stripped = rawToks.filter(t => t !== '->' && t !== '-').map(normPinToken);
+
+        // QUY TẮC 3: Tự động nhận diện chuỗi viết ngược từ GND lên VCC để đảo cực :2 -> :1 cho LED/C viết tắt
+        const firstTok = stripped[0], lastTok = stripped[stripped.length - 1];
+        const isRevFlow = hasArrow && stripped.length > 1 &&
+            ((firstTok === 'GND' && lastTok !== 'GND') || (lastTok === 'VCC' && firstTok !== 'VCC'));
+
+        const expanded = [];
+        for (let i = 0; i < stripped.length; i++) {
+            const t = stripped[i];
+            const c = byId[t];
+            if (c && c.pins === 2 && hasArrow) {
+                const revPol = isRevFlow && (c.type === 'LED' || c.type === 'C');
+                const pIn = revPol ? '2' : '1', pOut = revPol ? '1' : '2';
+                if (i > 0 && i < stripped.length - 1) expanded.push(`${t}:${pIn}`, `${t}:${pOut}`);
+                else if (i === 0 && stripped.length > 1) expanded.push(`${t}:${pOut}`);
+                else if (i === stripped.length - 1 && stripped.length > 1) expanded.push(`${t}:${pIn}`);
+                else expanded.push(t);
+            } else {
+                expanded.push(t);
+            }
+        }
+
+        const segments = [];
+        let curSeg = [];
+        for (let i = 0; i < expanded.length; i++) {
+            const cur = expanded[i];
+            if (curSeg.length > 0) {
+                const prev = curSeg[curSeg.length - 1];
+                const mPrev = prev.match(/^([A-Z]+\d+):(\d+)$/);
+                const mCur = cur.match(/^([A-Z]+\d+):(\d+)$/);
+                if (hasArrow && mPrev && mCur && mPrev[1] === mCur[1] && mPrev[2] !== mCur[2] && byId[mPrev[1]] && byId[mPrev[1]].type !== 'IC') {
+                    segments.push(curSeg);
+                    curSeg = [cur];
+                    continue;
+                }
+            }
+            curSeg.push(cur);
+        }
+        if (curSeg.length > 0) segments.push(curSeg);
+        if (netLabel && segments.length > 0) segments[0].unshift(netLabel);
+
+        segments.forEach(toks => {
+            if (toks.length < 2) { errors.push(`${ln}: cụm "${toks.join(' ')}" cần ít nhất 2 nút để nối dây`); return; }
+            let ok = true;
+            toks.forEach(t => {
+                const m = t.match(/^([A-Z]+\d+):(\d+)$/);
+                if (m) {
+                    const c = byId[m[1]];
+                    if (!c) { errors.push(`${ln}: không có linh kiện ${m[1]}`); ok = false; }
+                    else if (+m[2] < 1 || +m[2] > c.pins) { errors.push(`${ln}: ${t} ngoài dải 1-${c.pins}`); ok = false; }
+                } else if (byId[t]) {
+                    errors.push(`${ln}: ${t} thiếu số chân (dạng ${t}:1 hoặc dùng mũi tên ->)`); ok = false;
+                }
+            });
+            if (!ok) return;
+            toks.forEach(t => find(t));
+            toks.slice(1).forEach(t => union(toks[0], t));
+        });
+    });
+
+    const groups = {};
+    Object.keys(parent).forEach(n => { const r = find(n); (groups[r] = groups[r] || []).push(n); });
+    const nets = [], netOf = {}, netByName = {};
+    let k = 0;
+    Object.values(groups).forEach(g => {
+        const hasV = g.includes('VCC'), hasG = g.includes('GND');
+        if (hasV && hasG) errors.push('Ngắn mạch trực tiếp: VCC và GND bị nối chung trong cùng một mạng');
+        const bareNames = g.filter(n => !n.includes(':') && n !== 'VCC' && n !== 'GND');
+        const starName = bareNames.find(n => n.startsWith('*'));
+        const rawNamed = starName || bareNames[0];
+        const cleanNamed = rawNamed ? rawNamed.replace(/^\*+/, '') : null;
+        const name = hasV ? 'VCC' : hasG ? 'GND' : (cleanNamed || `NET${++k}`);
+        const pins = g.filter(n => n.includes(':'));
+        const isStar = !!starName || g.some(n => n.startsWith('*'));
+        const netObj = { name, pins, isStar };
+        nets.push(netObj);
+        netByName[name] = netObj;
+        pins.forEach(p => { netOf[p] = name; });
+    });
+
+    const swAdj = {};
+    const addSwEdge = (nA, nB, label) => {
+        if (!nA || !nB || nA === nB) return;
+        (swAdj[nA] = swAdj[nA] || []).push({ to: nB, label });
+        (swAdj[nB] = swAdj[nB] || []).push({ to: nA, label });
+    };
+
+    comps.forEach(c => {
+        if (c.pins === 2) {
+            const n1 = netOf[`${c.id}:1`], n2 = netOf[`${c.id}:2`];
+            if (n1 && n2 && n1 === n2) errors.push(`${c.id}: hai chân 1 và 2 bị nối tắt trong cùng mạng ${n1}`);
+        }
+        if (c.type === 'BTN2') {
+            const n1 = netOf[`${c.id}:1`], n2 = netOf[`${c.id}:2`];
+            if ((n1 === 'VCC' && n2 === 'GND') || (n1 === 'GND' && n2 === 'VCC')) errors.push(`Ngắn mạch VCC và GND khi nhấn nút ${c.id}`);
+            addSwEdge(n1, n2, `nhấn nút ${c.id}`);
+        } else if (c.type === 'BTN4') {
+            const leftNets = [netOf[`${c.id}:1`], netOf[`${c.id}:3`]].filter(Boolean);
+            const rightNets = [netOf[`${c.id}:2`], netOf[`${c.id}:4`]].filter(Boolean);
+            for (const nl of leftNets) for (const nr of rightNets) {
+                if (nl === nr) errors.push(`${c.id}: hai phía đóng/ngắt của nút bấm bị nối tắt sẵn ở mạng ${nl}`);
+                else if ((nl === 'VCC' && nr === 'GND') || (nl === 'GND' && nr === 'VCC')) errors.push(`Ngắn mạch VCC và GND khi nhấn nút ${c.id}`);
+                addSwEdge(nl, nr, `nhấn nút ${c.id}`);
+            }
+        } else if (c.type === 'SW') {
+            const n1 = netOf[`${c.id}:1`], n2 = netOf[`${c.id}:2`], n3 = netOf[`${c.id}:3`];
+            [[n1, n2, '1-2'], [n2, n3, '2-3']].forEach(([na, nb, pair]) => {
+                if (!na || !nb) return;
+                if (na === nb) errors.push(`${c.id}: chân ${pair} của công tắc bị nối tắt sẵn ở mạng ${na}`);
+                else if ((na === 'VCC' && nb === 'GND') || (na === 'GND' && nb === 'VCC')) errors.push(`Ngắn mạch VCC và GND khi gạt công tắc ${c.id} (cặp chân ${pair})`);
+                addSwEdge(na, nb, `gạt công tắc ${c.id}`);
+            });
+        }
+        if (c.type === 'LED' || c.type === 'C') {
+            const n1 = netOf[`${c.id}:1`], n2 = netOf[`${c.id}:2`];
+            const label = c.type === 'LED' ? `LED ${c.id}` : `Tụ phân cực ${c.id}`;
+            if (n1 === 'GND' || n2 === 'VCC') errors.push(`${label} bị mắc ngược cực tính (Chân 1 [+] không được nối GND, Chân 2 [-] không được nối VCC)`);
+            const swFrom1 = (swAdj[n1] || []).map(e => e.to), swFrom2 = (swAdj[n2] || []).map(e => e.to);
+            if ((swFrom1.includes('GND') && (n2 === 'VCC' || swFrom2.includes('VCC'))) ||
+                (swFrom2.includes('VCC') && (n1 === 'GND' || swFrom1.includes('GND')))) {
+                errors.push(`${label} bị cấp ngược cực tính khi đóng công tắc/nút bấm`);
+            }
+        }
+    });
+
+    // QUY TẮC 2 & SẠN 5: Kiểm tra trở hạn dòng đủ 2 chân & cho phép duyệt nối tiếp xuyên qua BTN/SW
+    const isSafeSeriesResistorNet = (netName, visitedLeds = new Set(), visitedNets = new Set()) => {
+        if (!netName || netName === 'VCC' || netName === 'GND' || visitedNets.has(netName)) return false;
+        visitedNets.add(netName);
+        const netObj = netByName[netName];
+        if (!netObj) return false;
+        let hasResistor = false, hasDirectSource = false;
+        const swEdges = swAdj[netName] || [];
+        if (swEdges.some(e => e.to === 'VCC' || e.to === 'GND')) return false;
+
+        for (const pin of netObj.pins) {
+            const [cid, pNum] = pin.split(':'), comp = byId[cid];
+            if (!comp) continue;
+            if (comp.type === 'IC') hasDirectSource = true;
+            else if (comp.type === 'R') {
+                const otherPin = `${cid}:${pNum === '1' ? '2' : '1'}`;
+                if (netOf[otherPin] && netOf[otherPin] !== netName) hasResistor = true;
+            } else if (comp.type === 'LED' && !visitedLeds.has(cid)) {
+                visitedLeds.add(cid);
+                const otherNet = netOf[`${cid}:1`] === netName ? netOf[`${cid}:2`] : netOf[`${cid}:1`];
+                if (isSafeSeriesResistorNet(otherNet, visitedLeds, new Set(visitedNets))) hasResistor = true;
+            }
+        }
+        if (!hasResistor && !hasDirectSource && swEdges.length > 0) {
+            if (swEdges.every(e => isSafeSeriesResistorNet(e.to, new Set(visitedLeds), new Set(visitedNets)))) hasResistor = true;
+        }
+        return hasResistor && !hasDirectSource;
+    };
+
+    comps.forEach(c => {
+        if (c.type !== 'LED') return;
+        const n1 = netOf[`${c.id}:1`], n2 = netOf[`${c.id}:2`];
+        if (!n1 && !n2) return;
+        if (!isSafeSeriesResistorNet(n1, new Set([c.id])) && !isSafeSeriesResistorNet(n2, new Set([c.id]))) {
+            errors.push(`LED ${c.id} nối trực tiếp vào nguồn/IC/công tắc mà không đi nối tiếp qua điện trở hạn dòng`);
+        }
+    });
+
+    return { errors, warns, nets };
+}
+
+// Kiểm tra netlist (chỉ đọc): dựng danh sách linh kiện ảo như khi Render rồi chạy parseNetlist
+function lintNetlist(text) {
+    text = text || '';
+    if (!text.trim()) return { empty: true };
+    const saved = components, rc = renderComponents;
+    components = saved.map(c => Object.assign({}, c));
+    renderComponents = () => {};
+    try {
+        syncComponentsFromNetlist(text);
+        const virt = components, p = parseNetlist(text, virt), used = new Set();
+        let star = 0, two = 0;
+        p.nets.forEach(n => {
+            if (n.isStar) star++;
+            if (n.name !== 'VCC' && n.name !== 'GND' && n.pins.length === 2) two++;
+            n.pins.forEach(x => used.add(x.split(':')[0]));
+        });
+        return { errors: p.errors, nets: p.nets.length, star, two, used: used.size, total: virt.length, unused: virt.filter(c => !used.has(c.id)).map(c => c.id) };
+    } catch (e) { return { fatal: String(e && e.message || e) }; }
+    finally { components = saved; renderComponents = rc; }
+}
+function updateNetStatus() {
+    const b = $('net-status'); if (!b) return;
+    const r = lintNetlist($('netlist-input').value);
+    let st = 'idle', txt = 'Chưa có netlist';
+    if (r.fatal) { st = 'bad'; txt = 'Không phân tích được cú pháp'; }
+    else if (!r.empty) { if (r.errors.length) { st = 'bad'; txt = r.errors.length + ' lỗi · xem chi tiết'; } else { st = 'ok'; txt = 'Hợp lệ · ' + r.nets + ' mạng'; } }
+    b.dataset.state = st; $('net-status-t').textContent = txt;
+}
+(function () {
+    let h; $('netlist-input').addEventListener('input', () => { clearTimeout(h); h = setTimeout(updateNetStatus, 350); });
+    $('net-status').onclick = () => NetlistGuide.showModal();
+    updateNetStatus();
+
+    const seg = $('theme-seg');
+    const syncSeg = () => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === window.__getTheme())));
+    seg.onclick = e => { const b = e.target.closest('[data-mode]'); if (b) { window.__setTheme(b.dataset.mode); syncSeg(); } };
+    syncSeg();
+})();
+
+// Thu phóng & di chuyển bản vẽ: nút, Ctrl/⌘ + cuộn (kể cả chụm trên touchpad), chụm hai ngón, kéo, nhấp đúp, phím + - 0
+(function () {
+    const box = $('breadboard-container'), lab = $('zoom-val');
+    const MIN = 0.6, MAX = 6, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let z = 1, anim = 0, inertia = 0, moved = false, suppress = false, drag = null, pinch = null, lastTap = null, g0 = 1;
+    const ptrs = new Map();
+    const svg = () => box.querySelector('svg');
+    const clamp = v => Math.min(MAX, Math.max(MIN, v));
+    const anchorAt = (cx, cy) => { const s = svg(); if (!s) return { rx: .5, ry: .5 }; const r = s.getBoundingClientRect(); return { rx: (cx - r.left) / r.width, ry: (cy - r.top) / r.height }; };
+    // đặt mức zoom nz sao cho điểm (rx, ry) của bản vẽ nằm đúng dưới (cx, cy) trên màn hình
+    function apply(nz, rx, ry, cx, cy) {
+        z = clamp(nz); box.style.setProperty('--z', z);
+        lab.textContent = Math.round(z * 100) + '%'; box.classList.toggle('pannable', z > 1.001);
+        const s = svg(); if (!s) return;
+        const r = s.getBoundingClientRect();
+        box.scrollLeft += r.left + rx * r.width - cx;
+        box.scrollTop += r.top + ry * r.height - cy;
+    }
+    const centre = () => { const r = box.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    function zoomTo(target, cx, cy) {
+        target = clamp(target); cancelAnimationFrame(anim); cancelAnimationFrame(inertia);
+        if (cx == null) [cx, cy] = centre();
+        const { rx, ry } = anchorAt(cx, cy), z0 = z, t0 = performance.now();
+        if (reduce) return apply(target, rx, ry, cx, cy);
+        const step = now => {
+            const k = Math.min(1, (now - t0) / 180), e = 1 - Math.pow(1 - k, 3);
+            apply(z0 * Math.pow(target / z0, e), rx, ry, cx, cy);
+            if (k < 1) anim = requestAnimationFrame(step);
+        };
+        anim = requestAnimationFrame(step);
+    }
+    $('zoom-in').onclick = () => zoomTo(z * 1.25);
+    $('zoom-out').onclick = () => zoomTo(z / 1.25);
+    $('zoom-val').onclick = () => zoomTo(1);
+
+    // Ctrl/⌘ + cuộn chuột, hoặc chụm hai ngón trên touchpad (trình duyệt gửi wheel + ctrlKey)
+    box.addEventListener('wheel', e => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault(); cancelAnimationFrame(anim); cancelAnimationFrame(inertia);
+        const dy = Math.max(-40, Math.min(40, e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY));
+        const { rx, ry } = anchorAt(e.clientX, e.clientY);
+        apply(z * Math.exp(-dy * 0.01), rx, ry, e.clientX, e.clientY);
+    }, { passive: false });
+    // Safari trên Mac: sự kiện cử chỉ riêng
+    box.addEventListener('gesturestart', e => { if (ptrs.size) return; e.preventDefault(); g0 = z; });
+    box.addEventListener('gesturechange', e => { if (ptrs.size) return; e.preventDefault(); const a = anchorAt(e.clientX, e.clientY); apply(g0 * e.scale, a.rx, a.ry, e.clientX, e.clientY); });
+
+    // Kéo để di chuyển (chuột/bút/cảm ứng), chụm hai ngón để phóng to
+    const pts = () => [...ptrs.values()];
+    function startPinch() {
+        const [a, b] = pts(), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+        pinch = Object.assign({ d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: z }, anchorAt(cx, cy));
+        drag = null; moved = true; box.classList.add('dragging');
+    }
+    box.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const r = box.getBoundingClientRect();
+        if (e.clientX - r.left > box.clientWidth || e.clientY - r.top > box.clientHeight) return; // thanh cuộn
+        cancelAnimationFrame(anim); cancelAnimationFrame(inertia);
+        ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (ptrs.size === 1) { moved = false; drag = { sx: e.clientX, sy: e.clientY, l: box.scrollLeft, t: box.scrollTop, lx: e.clientX, ly: e.clientY, lt: performance.now(), vx: 0, vy: 0 }; }
+        else if (ptrs.size === 2) startPinch();
+    });
+    addEventListener('pointermove', e => {
+        const p = ptrs.get(e.pointerId); if (!p) return;
+        p.x = e.clientX; p.y = e.clientY;
+        if (pinch && ptrs.size >= 2) {
+            const [a, b] = pts();
+            apply(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0, pinch.rx, pinch.ry, (a.x + b.x) / 2, (a.y + b.y) / 2);
+            return;
+        }
+        if (!drag) return;
+        const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+        if (!moved) { if (Math.hypot(dx, dy) < 4) return; moved = true; box.classList.add('dragging'); }
+        box.scrollLeft = drag.l - dx; box.scrollTop = drag.t - dy;
+        const now = performance.now(), dt = now - drag.lt;
+        if (dt > 0) { drag.vx = (e.clientX - drag.lx) / dt; drag.vy = (e.clientY - drag.ly) / dt; }
+        drag.lx = e.clientX; drag.ly = e.clientY; drag.lt = now;
+    });
+    function inertiaFrom(vx, vy) {
+        if (reduce || Math.hypot(vx, vy) < 0.15) return;
+        let last = performance.now();
+        const tick = now => {
+            const dt = now - last; last = now;
+            box.scrollLeft -= vx * dt; box.scrollTop -= vy * dt;
+            const f = Math.pow(0.94, dt / 16); vx *= f; vy *= f;
+            if (Math.hypot(vx, vy) > 0.02) inertia = requestAnimationFrame(tick);
+        };
+        inertia = requestAnimationFrame(tick);
+    }
+    function end(e) {
+        const p = ptrs.get(e.pointerId); if (!p) return;
+        ptrs.delete(e.pointerId);
+        if (pinch && ptrs.size < 2) {
+            pinch = null; const rem = pts()[0];
+            drag = rem ? { sx: rem.x, sy: rem.y, l: box.scrollLeft, t: box.scrollTop, lx: rem.x, ly: rem.y, lt: performance.now(), vx: 0, vy: 0 } : null;
+            if (!rem) { box.classList.remove('dragging'); suppress = true; setTimeout(() => suppress = false, 0); }
+            return;
+        }
+        if (ptrs.size) return;
+        box.classList.remove('dragging');
+        if (moved) {
+            suppress = true; setTimeout(() => suppress = false, 0);
+            if (e.type === 'pointerup' && drag && performance.now() - drag.lt < 80) inertiaFrom(drag.vx, drag.vy);
+        } else if (e.type === 'pointerup') {
+            const now = performance.now();
+            if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) { lastTap = null; zoomTo(z > 1.5 ? 1 : 2.5, e.clientX, e.clientY); }
+            else lastTap = { t: now, x: e.clientX, y: e.clientY };
+        }
+        drag = null;
+    }
+    addEventListener('pointerup', end); addEventListener('pointercancel', end);
+    box.addEventListener('click', e => { if (suppress) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('btn-render').click(); return; }
+        if (e.ctrlKey || e.metaKey || e.altKey || (e.target.closest && e.target.closest('input,textarea,select'))) return;
+        if (document.querySelector('.modal[style*="flex"]')) return;
+        if (e.key === '+' || e.key === '=') zoomTo(z * 1.25);
+        else if (e.key === '-' || e.key === '_') zoomTo(z / 1.25);
+        else if (e.key === '0') zoomTo(1);
+    });
+})();
+</script>
+<script src="wasm-bridge.js"></script>
+</body>
+</html>
